@@ -16,7 +16,6 @@
 #include <string>
 #include <variant>
 #include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Devices.Geolocation.h>
 #include <winrt/Windows.Devices.Bluetooth.h>
 #include <winrt/Windows.Devices.Radios.h>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -27,7 +26,6 @@ namespace {
 
 using namespace flutter;
 using namespace winrt;
-using namespace winrt::Windows::Devices::Geolocation;
 using namespace winrt::Windows::Devices::Bluetooth;
 using namespace winrt::Windows::Devices::Radios;
 
@@ -61,11 +59,7 @@ class PermissionHandlerWindowsPlugin : public Plugin {
                         std::unique_ptr<MethodResult<>>);
 
  private:
-  void IsLocationServiceEnabled(std::unique_ptr<MethodResult<>> result);
   winrt::fire_and_forget IsBluetoothServiceEnabled(std::unique_ptr<MethodResult<>> result);
-
-  winrt::Windows::Devices::Geolocation::Geolocator geolocator;
-  winrt::Windows::Devices::Geolocation::Geolocator::PositionChanged_revoker m_positionChangedRevoker;
 };
 
 // static
@@ -86,28 +80,17 @@ void PermissionHandlerWindowsPlugin::RegisterWithRegistrar(
   registrar->AddPlugin(std::move(plugin));
 }
 
-PermissionHandlerWindowsPlugin::PermissionHandlerWindowsPlugin(){
-  m_positionChangedRevoker = geolocator.PositionChanged(winrt::auto_revoke,
-    [this](Geolocator const& geolocator, PositionChangedEventArgs e)
-    {
-    });
-}
+PermissionHandlerWindowsPlugin::PermissionHandlerWindowsPlugin() {};
 
 PermissionHandlerWindowsPlugin::~PermissionHandlerWindowsPlugin() = default;
 
 void PermissionHandlerWindowsPlugin::HandleMethodCall(
     const MethodCall<>& method_call,
     std::unique_ptr<MethodResult<>> result) {
-  
+
   auto methodName = method_call.method_name();
   if (methodName.compare("checkServiceStatus") == 0) {
     auto permission = (PermissionConstants::PermissionGroup)std::get<int>(*method_call.arguments());
-    if (permission == PermissionConstants::PermissionGroup::LOCATION ||
-        permission == PermissionConstants::PermissionGroup::LOCATION_ALWAYS ||
-        permission == PermissionConstants::PermissionGroup::LOCATION_WHEN_IN_USE) {
-        IsLocationServiceEnabled(std::move(result));
-        return;
-    }
     if(permission == PermissionConstants::PermissionGroup::BLUETOOTH){
         IsBluetoothServiceEnabled(std::move(result));
         return;
@@ -119,7 +102,7 @@ void PermissionHandlerWindowsPlugin::HandleMethodCall(
     }
 
     result->Success(EncodableValue((int)PermissionConstants::ServiceStatus::NOT_APPLICABLE));
-    
+
   } else if (methodName.compare("checkPermissionStatus") == 0) {
     result->Success(EncodableValue((int)PermissionConstants::PermissionStatus::GRANTED));
   } else if (methodName.compare("requestPermissions") == 0) {
@@ -131,7 +114,7 @@ void PermissionHandlerWindowsPlugin::HandleMethodCall(
                     [](const EncodableValue& encoded) {
                       return std::get<int>(encoded);
                     });
-    
+
     EncodableMap requestResults;
 
     for (int i=0;i<permissions.size();i++) {
@@ -148,12 +131,6 @@ void PermissionHandlerWindowsPlugin::HandleMethodCall(
   }
 }
 
-void PermissionHandlerWindowsPlugin::IsLocationServiceEnabled(std::unique_ptr<MethodResult<>> result) {
-  result->Success(EncodableValue((int)(geolocator.LocationStatus() != PositionStatus::NotAvailable
-        ? PermissionConstants::ServiceStatus::ENABLED
-        : PermissionConstants::ServiceStatus::DISABLED)));
-}
-
 winrt::fire_and_forget PermissionHandlerWindowsPlugin::IsBluetoothServiceEnabled(std::unique_ptr<MethodResult<>> result) {
   auto btAdapter = co_await BluetoothAdapter::GetDefaultAsync();
 
@@ -161,12 +138,12 @@ winrt::fire_and_forget PermissionHandlerWindowsPlugin::IsBluetoothServiceEnabled
     result->Success(EncodableValue((int)PermissionConstants::ServiceStatus::DISABLED));
     co_return;
   }
-  
+
   if (!btAdapter.IsCentralRoleSupported()) {
     result->Success(EncodableValue((int)PermissionConstants::ServiceStatus::DISABLED));
     co_return;
   }
-  
+
   auto radios = co_await Radio::GetRadiosAsync();
 
   for (uint32_t i=0; i<radios.Size(); i++) {
